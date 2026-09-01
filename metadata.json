@@ -1,0 +1,6 @@
+{
+  "name": "Gordeixo's Pizzaria - Brasília 1986",
+  "description": "Sistema completo de cardápio digital, personalização de pizza artesanal no forno a lenha, cálculo de frete por bairro do DF e checkout com integração WhatsApp para a Pizzaria Gordeixo's.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
