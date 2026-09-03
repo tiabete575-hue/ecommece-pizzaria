@@ -174,72 +174,78 @@ export function AdminPanel({ onBackToStore }: AdminPanelProps) {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl overflow-x-auto">
-          <button
-            onClick={() => setActiveView('kds')}
-            className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeView === 'kds'
-                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Flame className="w-4 h-4" />
-            <span>KDS & Gestor de Pedidos</span>
-            {stats.pedidosNovos > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-red-600 text-white animate-pulse">
-                {stats.pedidosNovos} Novos
-              </span>
-            )}
-          </button>
+        {/* Navigation Tabs — grid responsivo, todas as abas visíveis sem scroll */}
+        <div className="p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
+          {/* Linha 1: 3 abas principais */}
+          <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+            <button
+              onClick={() => setActiveView('kds')}
+              className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeView === 'kds'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Flame className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">KDS &amp; Pedidos</span>
+              {stats.pedidosNovos > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-red-600 text-white animate-pulse flex-shrink-0">
+                  {stats.pedidosNovos}
+                </span>
+              )}
+            </button>
 
-          <button
-            onClick={() => setActiveView('menu')}
-            className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeView === 'menu'
-                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <UtensilsCrossed className="w-4 h-4" />
-            <span>Cardápio & Pausar Sabores</span>
-          </button>
+            <button
+              onClick={() => setActiveView('menu')}
+              className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeView === 'menu'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <UtensilsCrossed className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Cardápio</span>
+            </button>
 
-          <button
-            onClick={() => setActiveView('coupons')}
-            className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeView === 'coupons'
-                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Ticket className="w-4 h-4" />
-            <span>Cupons & Taxas de Entrega DF</span>
-          </button>
+            <button
+              onClick={() => setActiveView('coupons')}
+              className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeView === 'coupons'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Ticket className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Cupons &amp; Taxas</span>
+            </button>
+          </div>
 
-          <button
-            onClick={() => setActiveView('gateways')}
-            className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeView === 'gateways'
-                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Gateways de Pagamento & Webhooks</span>
-          </button>
+          {/* Linha 2: 2 abas secundárias */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => setActiveView('gateways')}
+              className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeView === 'gateways'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <CreditCard className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Gateways de Pagamento</span>
+            </button>
 
-          <button
-            onClick={() => setActiveView('printers')}
-            className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeView === 'printers'
-                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Printer className="w-4 h-4" />
-            <span>Impressoras Térmicas</span>
-          </button>
+            <button
+              onClick={() => setActiveView('printers')}
+              className={`py-3 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeView === 'printers'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Printer className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">🖨️ Impressoras Térmicas</span>
+            </button>
+          </div>
         </div>
 
         {/* Render Active View */}
