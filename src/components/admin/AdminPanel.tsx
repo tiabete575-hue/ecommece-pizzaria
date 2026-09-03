@@ -3,6 +3,7 @@ import { KitchenDisplayBoard } from './KitchenDisplayBoard.tsx';
 import { MenuManager } from './MenuManager.tsx';
 import { CouponsAndDeliveryManager } from './CouponsAndDeliveryManager.tsx';
 import { PaymentGatewaysManager } from './PaymentGatewaysManager.tsx';
+import { PrintersManager } from './PrintersManager.tsx';
 import { fetchAdminStats, logoutAdmin } from '../../services/api.ts';
 import {
   ChefHat,
@@ -18,7 +19,8 @@ import {
   Layers,
   Sparkles,
   LogOut,
-  CreditCard
+  CreditCard,
+  Printer
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -26,7 +28,7 @@ interface AdminPanelProps {
 }
 
 export function AdminPanel({ onBackToStore }: AdminPanelProps) {
-  const [activeView, setActiveView] = useState<'kds' | 'menu' | 'coupons' | 'gateways'>('kds');
+  const [activeView, setActiveView] = useState<'kds' | 'menu' | 'coupons' | 'gateways' | 'printers'>('kds');
   const [stats, setStats] = useState({
     totalPedidos: 0,
     pedidosHoje: 0,
@@ -226,6 +228,18 @@ export function AdminPanel({ onBackToStore }: AdminPanelProps) {
             <CreditCard className="w-4 h-4" />
             <span>Gateways de Pagamento & Webhooks</span>
           </button>
+
+          <button
+            onClick={() => setActiveView('printers')}
+            className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
+              activeView === 'printers'
+                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Printer className="w-4 h-4" />
+            <span>Impressoras Térmicas</span>
+          </button>
         </div>
 
         {/* Render Active View */}
@@ -233,6 +247,7 @@ export function AdminPanel({ onBackToStore }: AdminPanelProps) {
         {activeView === 'menu' && <MenuManager onMenuUpdated={loadStats} />}
         {activeView === 'coupons' && <CouponsAndDeliveryManager />}
         {activeView === 'gateways' && <PaymentGatewaysManager />}
+        {activeView === 'printers' && <PrintersManager />}
       </main>
     </div>
   );

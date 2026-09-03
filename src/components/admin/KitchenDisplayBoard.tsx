@@ -3,7 +3,9 @@ import { KitchenOrder, KitchenStatus } from '../../types/index.ts';
 import {
   fetchAdminOrders,
   updateOrderStatus,
-  createMockOrder
+  createMockOrder,
+  sendToPrinter,
+  loadPrintersSettings
 } from '../../services/api.ts';
 import { soundManager } from '../../utils/soundEffects.ts';
 import { ThermalReceiptModal } from './ThermalReceiptModal.tsx';
@@ -57,11 +59,28 @@ export function KitchenDisplayBoard({ onRefreshStats }: KitchenDisplayBoardProps
           previousOrderCountRef.current > 0 &&
           fetchedOrders.length > previousOrderCountRef.current
         ) {
-          const hasNewPending = fetchedOrders.some(
+          const newOrders = fetchedOrders.filter(
             (o) => o.status === 'recebido' && Date.now() - o.createdAt < 20000
           );
+          const hasNewPending = newOrders.length > 0;
+
           if (hasNewPending && isSoundOn) {
             soundManager.playNewOrderChime();
+          }
+
+          // Impressão automática
+          if (hasNewPending) {
+            const printerSettings = loadPrintersSettings();
+            if (printerSettings.autoprint) {
+              for (const newOrder of newOrders) {
+                if (printerSettings.autoprintTarget === 'ambas') {
+                  sendToPrinter('cozinha', newOrder).catch(console.error);
+                  sendToPrinter('balcao', newOrder).catch(console.error);
+                } else {
+                  sendToPrinter('cozinha', newOrder).catch(console.error);
+                }
+              }
+            }
           }
         }
         previousOrderCountRef.current = fetchedOrders.length;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { KitchenOrder } from '../../types/index.ts';
-import { Printer, X, Check, Scissors, Phone, MapPin, CreditCard, Clock, Utensils } from 'lucide-react';
+import { sendToPrinter } from '../../services/api.ts';
+import { Printer, X, Scissors, Wifi, CheckCircle2, XCircle, Loader2, ChefHat, Store } from 'lucide-react';
 
 interface ThermalReceiptModalProps {
   order: KitchenOrder | null;
@@ -10,11 +11,28 @@ interface ThermalReceiptModalProps {
 export function ThermalReceiptModal({ order, onClose }: ThermalReceiptModalProps) {
   const [paperWidth, setPaperWidth] = useState<'80mm' | '58mm'>('80mm');
   const [receiptType, setReceiptType] = useState<'completo' | 'cozinha' | 'expedicao'>('completo');
+  const [networkStatus, setNetworkStatus] = useState<Record<string, { loading: boolean; result: { ok: boolean; msg: string } | null }>>({});
 
   if (!order) return null;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleNetworkPrint = async (target: 'balcao' | 'cozinha') => {
+    setNetworkStatus(prev => ({ ...prev, [target]: { loading: true, result: null } }));
+    try {
+      const result = await sendToPrinter(target, order);
+      setNetworkStatus(prev => ({
+        ...prev,
+        [target]: { loading: false, result: { ok: result.sucesso, msg: result.mensagem } }
+      }));
+    } catch (err: any) {
+      setNetworkStatus(prev => ({
+        ...prev,
+        [target]: { loading: false, result: { ok: false, msg: err.message || 'Erro ao enviar para impressora.' } }
+      }));
+    }
   };
 
   return (
@@ -103,14 +121,67 @@ export function ThermalReceiptModal({ order, onClose }: ThermalReceiptModalProps
             </div>
           </div>
 
-          <button
-            onClick={handlePrint}
-            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95 transition"
-          >
-            <Printer className="w-4 h-4" />
-            <span>IMPRIMIR AGORA</span>
-          </button>
-        </div>
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Imprimir via Navegador */}
+            <button
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95 transition"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Via Navegador</span>
+            </button>
+
+            {/* Enviar para Cozinha via IP */}
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => handleNetworkPrint('cozinha')}
+                disabled={networkStatus['cozinha']?.loading}
+                className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow active:scale-95 transition disabled:opacity-60"
+                title="Envia ESC/POS diretamente para IP da cozinha"
+              >
+                {networkStatus['cozinha']?.loading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <ChefHat className="w-4 h-4" />}
+                <span>Cozinha (IP)</span>
+              </button>
+              {networkStatus['cozinha']?.result && (
+                <div className={`text-[10px] flex items-center gap-1 px-2 ${networkStatus['cozinha'].result.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {networkStatus['cozinha'].result.ok
+                    ? <CheckCircle2 className="w-3 h-3" />
+                    : <XCircle className="w-3 h-3" />}
+                  <span className="truncate max-w-[140px]" title={networkStatus['cozinha'].result.msg}>
+                    {networkStatus['cozinha'].result.msg}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Enviar para Balcão via IP */}
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => handleNetworkPrint('balcao')}
+                disabled={networkStatus['balcao']?.loading}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs inline-flex items-center gap-2 cursor-pointer shadow active:scale-95 transition disabled:opacity-60"
+                title="Envia ESC/POS diretamente para IP do balcão"
+              >
+                {networkStatus['balcao']?.loading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Store className="w-4 h-4" />}
+                <span>Balcão (IP)</span>
+              </button>
+              {networkStatus['balcao']?.result && (
+                <div className={`text-[10px] flex items-center gap-1 px-2 ${networkStatus['balcao'].result.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {networkStatus['balcao'].result.ok
+                    ? <CheckCircle2 className="w-3 h-3" />
+                    : <XCircle className="w-3 h-3" />}
+                  <span className="truncate max-w-[140px]" title={networkStatus['balcao'].result.msg}>
+                    {networkStatus['balcao'].result.msg}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
         {/* Printable Receipt Paper Container */}
         <div className="p-6 bg-slate-950 flex justify-center overflow-x-auto max-h-[70vh] print:p-0 print:max-h-none print:bg-white print:overflow-visible">

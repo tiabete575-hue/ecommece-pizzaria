@@ -372,3 +372,122 @@ export const simulatePaymentApproval = async (transactionId: string) => {
   if (!response.ok) throw new Error('Falha ao simular aprovação do pagamento.');
   return response.json();
 };
+
+// ==========================================
+// IMPRESSORAS TÉRMICAS ESC/POS
+// ==========================================
+
+import type { PrintersSettings, PrintJobResult, KitchenOrder } from '../types/index.ts';
+
+const PRINTERS_STORAGE_KEY = 'gordeixos_printers_config';
+
+/** Retorna configuração padrão de impressoras */
+export const getDefaultPrintersSettings = (): PrintersSettings => ({
+  balcao: {
+    enabled: false,
+    ip: '',
+    port: 9100,
+    paperWidth: '80mm',
+    name: 'Balcao / Atendimento',
+    autoCut: true
+  },
+  cozinha: {
+    enabled: false,
+    ip: '',
+    port: 9100,
+    paperWidth: '80mm',
+    name: 'Cozinha / Forno',
+    autoCut: true
+  },
+  autoprint: false,
+  autoprintTarget: 'cozinha'
+});
+
+/** Carrega configuração de impressoras do localStorage */
+export const loadPrintersSettings = (): PrintersSettings => {
+  try {
+    const raw = localStorage.getItem(PRINTERS_STORAGE_KEY);
+    if (!raw) return getDefaultPrintersSettings();
+    return { ...getDefaultPrintersSettings(), ...JSON.parse(raw) };
+  } catch {
+    return getDefaultPrintersSettings();
+  }
+};
+
+/** Salva configuração de impressoras no localStorage */
+export const savePrintersSettings = (settings: PrintersSettings): void => {
+  localStorage.setItem(PRINTERS_STORAGE_KEY, JSON.stringify(settings));
+};
+
+/** Envia job de impressão para a API /api/print (que abre socket TCP para a impressora) */
+export const sendToPrinter = async (
+  target: 'balcao' | 'cozinha',
+  order: KitchenOrder
+): Promise<PrintJobResult> => {
+  const settings = loadPrintersSettings();
+  const printerCfg = target === 'balcao' ? settings.balcao : settings.cozinha;
+
+  if (!printerCfg.enabled) {
+    return {
+      sucesso: false,
+      mensagem: `Impressora de ${target === 'balcao' ? 'Balcão' : 'Cozinha'} está desabilitada. Ative-a nas configurações.`,
+      target
+    };
+  }
+
+  if (!printerCfg.ip || !printerCfg.ip.trim()) {
+    return {
+      sucesso: false,
+      mensagem: `IP da impressora de ${target === 'balcao' ? 'Balcão' : 'Cozinha'} não configurado.`,
+      target
+    };
+  }
+
+  const response = await fetch('/api/print', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      target,
+      order,
+      paperWidth: printerCfg.paperWidth,
+      printerIp: printerCfg.ip,
+      printerPort: printerCfg.port,
+      autoCut: printerCfg.autoCut
+    })
+  });
+
+  return response.json();
+};
+
+/** Envia uma página de teste para a impressora */
+export const testPrinterConnection = async (
+  target: 'balcao' | 'cozinha'
+): Promise<PrintJobResult> => {
+  const settings = loadPrintersSettings();
+  const printerCfg = target === 'balcao' ? settings.balcao : settings.cozinha;
+
+  if (!printerCfg.ip || !printerCfg.ip.trim()) {
+    return {
+      sucesso: false,
+      mensagem: 'Configure o IP da impressora antes de testar.',
+      target
+    };
+  }
+
+  const response = await fetch('/api/print', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      target,
+      isTest: true,
+      printerName: printerCfg.name,
+      paperWidth: printerCfg.paperWidth,
+      printerIp: printerCfg.ip,
+      printerPort: printerCfg.port,
+      autoCut: printerCfg.autoCut
+    })
+  });
+
+  return response.json();
+};
+

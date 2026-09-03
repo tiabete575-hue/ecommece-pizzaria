@@ -241,6 +241,42 @@ export interface CardPaymentResponse {
   erro?: string;
 }
 
+// ==========================================
+// CONFIGURAÇÃO DE IMPRESSORAS TÉRMICAS ESC/POS
+// ==========================================
+
+export interface PrinterConfig {
+  enabled: boolean;
+  ip: string;
+  port: number;           // padrão: 9100 (RAW/ESC-POS)
+  paperWidth: '80mm' | '58mm';
+  name: string;
+  autoCut: boolean;       // comando GS V (guilhotina automática)
+}
+
+export interface PrintersSettings {
+  balcao: PrinterConfig;   // Impressora do balcão/expedição (cupom completo)
+  cozinha: PrinterConfig;  // Impressora da cozinha (comanda sem valores)
+  autoprint: boolean;      // Imprimir automaticamente ao receber novo pedido
+  autoprintTarget: 'cozinha' | 'ambas'; // Para qual impressora enviar automaticamente
+}
+
+export interface PrintJobPayload {
+  target: 'balcao' | 'cozinha';
+  order: KitchenOrder;
+  paperWidth: '80mm' | '58mm';
+  printerIp: string;
+  printerPort: number;
+  autoCut: boolean;
+}
+
+export interface PrintJobResult {
+  sucesso: boolean;
+  mensagem: string;
+  target: 'balcao' | 'cozinha';
+  ip?: string;
+}
+
 export interface OrderResponse {
   sucesso: boolean;
   mensagem: string;
