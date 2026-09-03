@@ -186,7 +186,9 @@ class RestaurantStore {
 
   public async initialize(): Promise<void> {
     if (!isSupabaseConfigured()) {
-      throw new Error('Banco obrigatório: configure SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY.');
+      console.warn('[RestaurantStore] Supabase não configurado. Operando com cardápio e dados em memória (modo local/demo).');
+      this.initialized = true;
+      return;
     }
 
     const stores = await supabaseRest<any[]>('stores', {
@@ -303,6 +305,7 @@ class RestaurantStore {
   }
 
   public async reloadFromDatabase() {
+    if (!isSupabaseConfigured() || !this.storeId) return;
     const [products, groups, coupons, zones, orders] = await Promise.all([
       supabaseRest<any[]>('products', { query: `select=*,categories(slug),product_variants(*)&store_id=eq.${this.storeId}&order=sort_order.asc` }),
       supabaseRest<any[]>('option_groups', { query: `select=slug,product_options(*)&store_id=eq.${this.storeId}` }),
@@ -388,6 +391,15 @@ class RestaurantStore {
 
   public async addOrder(order: StoredOrder): Promise<StoredOrder> {
     const onlinePayment = ['pix', 'cartao_online'].includes(order.cliente.formaPagamento);
+    if (!isSupabaseConfigured()) {
+      const persisted: StoredOrder = {
+        ...order,
+        status: onlinePayment ? 'pending_payment' as const : 'recebido' as const
+      };
+      this.orders.unshift(persisted);
+      return persisted;
+    }
+
     const paymentMethodMap: Record<string, string> = { pix: 'pix', cartao_online: 'credit_card_online', cartao_credito: 'credit_card_on_delivery', cartao_debito: 'debit_card_on_delivery', dinheiro: 'cash' };
     const zone = order.cliente.bairroId ? await supabaseRest<any[]>('delivery_zones', { query: `select=id&store_id=eq.${this.storeId}&slug=eq.${encodeURIComponent(order.cliente.bairroId)}&limit=1` }) : [];
     const [created] = await supabaseRest<any[]>('orders', {
@@ -435,8 +447,10 @@ class RestaurantStore {
     const order = this.orders.find((o) => o.id === id || o.numeroPedido === id);
     if (!order) return null;
 
-    const statusMap: Record<KitchenOrderStatus, string> = { pending_payment: 'pending_payment', recebido: 'received', preparando: 'preparing', saiu_entrega: 'out_for_delivery', pronto_retirada: 'ready_for_pickup', concluido: 'completed', cancelado: 'cancelled' };
-    await supabaseRest('orders', { method: 'PATCH', query: `id=eq.${encodeURIComponent(order.id)}`, body: { status: statusMap[newStatus], completed_at: newStatus === 'concluido' ? new Date().toISOString() : undefined, cancelled_at: newStatus === 'cancelado' ? new Date().toISOString() : undefined } });
+    if (isSupabaseConfigured()) {
+      const statusMap: Record<KitchenOrderStatus, string> = { pending_payment: 'pending_payment', recebido: 'received', preparando: 'preparing', saiu_entrega: 'out_for_delivery', pronto_retirada: 'ready_for_pickup', concluido: 'completed', cancelado: 'cancelled' };
+      await supabaseRest('orders', { method: 'PATCH', query: `id=eq.${encodeURIComponent(order.id)}`, body: { status: statusMap[newStatus], completed_at: newStatus === 'concluido' ? new Date().toISOString() : undefined, cancelled_at: newStatus === 'cancelado' ? new Date().toISOString() : undefined } });
+    }
 
     order.status = newStatus;
     if (!order.statusHistory) order.statusHistory = [];
@@ -453,7 +467,9 @@ class RestaurantStore {
     const order = this.orders.find((o) => o.id === id || o.numeroPedido === id);
     if (!order) return null;
     order.motoboyNome = motoboyNome;
-    await supabaseRest('orders', { method: 'PATCH', query: `id=eq.${encodeURIComponent(order.id)}`, body: { internal_notes: `Motoboy: ${motoboyNome}` } });
+    if (isSupabaseConfigured()) {
+      await supabaseRest('orders', { method: 'PATCH', query: `id=eq.${encodeURIComponent(order.id)}`, body: { internal_notes: `Motoboy: ${motoboyNome}` } });
+    }
     return order;
   }
 

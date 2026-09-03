@@ -4,7 +4,7 @@ import type { KitchenOrderStatus } from '../../../server/data/store.ts';
 import { restaurantStore } from '../../../server/data/store.ts';
 import { processOrder } from '../../../server/controllers/orderController.ts';
 import { paymentGatewayService } from '../../../server/services/paymentGateways.ts';
-import { loadStaffIdentity, signInStaff } from '../../../server/lib/supabase.ts';
+import { loadStaffIdentity, signInStaff, isSupabaseConfigured } from '../../../server/lib/supabase.ts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,6 +39,9 @@ async function readBody(request: NextRequest) {
 async function authorize(request: NextRequest, roles?: string[]) {
   const token = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return { error: json({ sucesso: false, mensagem: 'Sessão administrativa obrigatória.' }, 401) };
+  if (!isSupabaseConfigured() && (token === 'mock_admin_token' || token.startsWith('mock_'))) {
+    return { staff: { userId: 'mock-admin', fullName: 'Administrador Demo', role: 'owner' as const, storeId: 'mock' } };
+  }
   const staff = await loadStaffIdentity(token).catch(() => null);
   if (!staff) return { error: json({ sucesso: false, mensagem: 'Sessão inválida ou expirada.' }, 401) };
   if (roles && !roles.includes(staff.role)) return { error: json({ sucesso: false, mensagem: 'Perfil sem permissão para esta operação.' }, 403) };
@@ -67,6 +70,15 @@ async function dispatch(request: NextRequest, pathParts: string[]) {
 
     if (method === 'POST' && path === '/auth/login') {
       if (!body.email || !body.password) return json({ sucesso: false, mensagem: 'Informe e-mail e senha.' }, 400);
+      if (!isSupabaseConfigured()) {
+        return json({
+          sucesso: true,
+          session: {
+            token: 'mock_admin_token',
+            staff: { userId: 'mock-admin', email: body.email, fullName: 'Administrador Demo', role: 'owner', storeId: 'mock' }
+          }
+        });
+      }
       try {
         const session = await signInStaff(String(body.email).trim().toLowerCase(), String(body.password));
         return json({ sucesso: true, session });

@@ -10,7 +10,7 @@ import type {
   CardPaymentResponse
 } from '../../src/types/index.ts';
 import { restaurantStore } from '../data/store.ts';
-import { supabaseRest } from '../lib/supabase.ts';
+import { isSupabaseConfigured, supabaseRest } from '../lib/supabase.ts';
 
 // Helper to calculate Pix CRC16-CCITT according to BCB EMVCo standard
 export function calculatePixCRC16(payload: string): string {
@@ -78,6 +78,7 @@ export function generatePixCopiaECola(
 
 export class PaymentGatewayService {
   private config: GatewaysConfig;
+  private inMemoryTransactions = new Map<string, PaymentTransaction>();
 
   constructor() {
     // Initial configuration loaded from environment or defaults
@@ -112,6 +113,7 @@ export class PaymentGatewayService {
   }
 
   public async loadPersistedConfig(): Promise<void> {
+    if (!isSupabaseConfigured()) return;
     const rows = await supabaseRest<any[]>('gateway_settings', {
       query: 'select=provider,active,sandbox,public_config&active=eq.true&limit=1'
     });
@@ -129,6 +131,7 @@ export class PaymentGatewayService {
   }
 
   private async persistPublicConfig(): Promise<void> {
+    if (!isSupabaseConfigured()) return;
     const stores = await supabaseRest<any[]>('stores', { query: 'select=id&slug=eq.gordeixos-brasilia&limit=1' });
     const storeId = stores[0]?.id;
     if (!storeId) throw new Error('Loja principal não encontrada para salvar o gateway.');
@@ -443,18 +446,23 @@ export class PaymentGatewayService {
         });
       }
 
-      const [payment] = await supabaseRest<any[]>('payments', { method: 'POST', body: {
-        order_id: orderId,
-        idempotency_key: transactionId,
-        provider: activeGateway,
-        provider_transaction_id: txid,
-        method: 'pix', status: 'pending', amount,
-        pix_copy_paste: pixCopiaECola,
-        pix_expires_at: new Date(expiresAt).toISOString(),
-        metadata: { demo: isSandbox }
-      } });
+      let paymentId = transactionId;
+      if (isSupabaseConfigured()) {
+        const [payment] = await supabaseRest<any[]>('payments', { method: 'POST', body: {
+          order_id: orderId,
+          idempotency_key: transactionId,
+          provider: activeGateway,
+          provider_transaction_id: txid,
+          method: 'pix', status: 'pending', amount,
+          pix_copy_paste: pixCopiaECola,
+          pix_expires_at: new Date(expiresAt).toISOString(),
+          metadata: { demo: isSandbox }
+        } });
+        if (payment?.id) paymentId = payment.id;
+      }
+
       const transaction: PaymentTransaction = {
-        id: payment.id,
+        id: paymentId,
         orderId,
         gateway: activeGateway,
         method: 'pix',
@@ -467,11 +475,12 @@ export class PaymentGatewayService {
         pixExpirationDate: new Date(expiresAt).toISOString(),
         gatewayTransactionId: txid
       };
+      this.inMemoryTransactions.set(paymentId, transaction);
 
       return {
         sucesso: true,
         mensagem: 'Cobrança PIX Dinâmica gerada com sucesso!',
-        transactionId: payment.id,
+        transactionId: paymentId,
         orderId,
         status: 'pending',
         amount,
@@ -488,12 +497,19 @@ export class PaymentGatewayService {
       pixCopiaECola = generatePixCopiaECola(chavePix, "GORDEIXOS PIZZARIA", 'BRASILIA', amount, txid);
       pixQrCodeBase64 = await QRCode.toDataURL(pixCopiaECola, { width: 320, margin: 2 });
 
-      const [payment] = await supabaseRest<any[]>('payments', { method: 'POST', body: {
-        order_id: orderId, idempotency_key: transactionId, provider: 'simulated', method: 'pix', status: 'pending', amount,
-        pix_copy_paste: pixCopiaECola, pix_expires_at: new Date(expiresAt).toISOString(), metadata: { demo: true }
-      } });
+      let fallbackPaymentId = transactionId;
+      if (isSupabaseConfigured()) {
+        try {
+          const [payment] = await supabaseRest<any[]>('payments', { method: 'POST', body: {
+            order_id: orderId, idempotency_key: transactionId, provider: 'simulated', method: 'pix', status: 'pending', amount,
+            pix_copy_paste: pixCopiaECola, pix_expires_at: new Date(expiresAt).toISOString(), metadata: { demo: true }
+          } });
+          if (payment?.id) fallbackPaymentId = payment.id;
+        } catch {}
+      }
+
       const transaction: PaymentTransaction = {
-        id: payment.id,
+        id: fallbackPaymentId,
         orderId,
         gateway: 'simulated',
         method: 'pix',
@@ -505,11 +521,12 @@ export class PaymentGatewayService {
         pixQrCodeBase64,
         pixExpirationDate: new Date(expiresAt).toISOString()
       };
+      this.inMemoryTransactions.set(fallbackPaymentId, transaction);
 
       return {
         sucesso: true,
         mensagem: 'PIX Instantâneo gerado com sucesso.',
-        transactionId: payment.id,
+        transactionId: fallbackPaymentId,
         orderId,
         status: 'pending',
         amount,
@@ -524,14 +541,20 @@ export class PaymentGatewayService {
 
   // 2. PROCESS ONLINE CARD PAYMENT
   public async processCardPayment(payload: CardPaymentPayload): Promise<CardPaymentResponse> {
-    const { orderId, demoToken, cardLast4, cardBrand, installments } = payload;
+    const orderId = payload.orderId;
+    const rawCard = String((payload as any).cardNumber || '').replace(/\D/g, '');
+    const cardLast4 = payload.cardLast4 || (rawCard ? rawCard.slice(-4) : '');
+    const demoToken = payload.demoToken || (cardLast4 ? `demo_${cardLast4}` : '');
+    const cardBrand = payload.cardBrand || (/^4/.test(rawCard) ? 'Visa' : /^5/.test(rawCard) ? 'Mastercard' : 'Cartão Demo');
+    const installments = payload.installments || 1;
+
     const order = restaurantStore.getOrderById(orderId);
     const amount = order?.total || 0;
     const transactionId = `tx_card_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const activeGateway = this.config.activeGateway;
     const isSandbox = this.config.sandboxMode || activeGateway === 'simulated';
 
-    if (!order || !demoToken.startsWith('demo_') || !/^\d{4}$/.test(cardLast4)) {
+    if (!order || !demoToken?.startsWith('demo_') || !/^\d{4}$/.test(cardLast4)) {
       return {
         sucesso: false,
         mensagem: 'Número de cartão inválido.',
@@ -550,8 +573,17 @@ export class PaymentGatewayService {
     }
 
     // Approve transaction
+    let paymentId = transactionId;
+    if (isSupabaseConfigured()) {
+      const [payment] = await supabaseRest<any[]>('payments', { method: 'POST', body: {
+        order_id: orderId, idempotency_key: transactionId, provider: activeGateway, method: 'credit_card', status: 'paid', amount,
+        installments: installments || 1, card_last4: cardLast4, card_brand: cardBrand, paid_at: new Date().toISOString(), metadata: { demo: true, demo_token: demoToken }
+      } });
+      if (payment?.id) paymentId = payment.id;
+    }
+
     const transaction: PaymentTransaction = {
-      id: transactionId,
+      id: paymentId,
       orderId,
       gateway: activeGateway,
       method: 'credit_card',
@@ -564,20 +596,15 @@ export class PaymentGatewayService {
       cardBrand,
       installments: installments || 1
     };
-
-    const [payment] = await supabaseRest<any[]>('payments', { method: 'POST', body: {
-      order_id: orderId, idempotency_key: transactionId, provider: activeGateway, method: 'credit_card', status: 'paid', amount,
-      installments: installments || 1, card_last4: cardLast4, card_brand: cardBrand, paid_at: new Date().toISOString(), metadata: { demo: true, demo_token: demoToken }
-    } });
-    transaction.id = payment.id;
+    this.inMemoryTransactions.set(paymentId, transaction);
 
     // Update order in kitchen store
-    await this.markOrderAsPaid(orderId, 'credit_card', payment.id);
+    await this.markOrderAsPaid(orderId, 'credit_card', paymentId);
 
     return {
       sucesso: true,
       mensagem: 'Pagamento no cartão de crédito aprovado com sucesso!',
-      transactionId: payment.id,
+      transactionId: paymentId,
       orderId,
       status: 'approved',
       amount,
@@ -591,8 +618,11 @@ export class PaymentGatewayService {
 
   // 3. GET TRANSACTION STATUS (Polling or Check)
   public async getTransactionStatus(transactionId: string): Promise<PaymentTransaction | null> {
+    if (!isSupabaseConfigured()) {
+      return this.inMemoryTransactions.get(transactionId) || null;
+    }
     const rows = await supabaseRest<any[]>('payments', { query: `select=*&id=eq.${encodeURIComponent(transactionId)}&limit=1` });
-    return rows[0] ? this.mapPayment(rows[0]) : null;
+    return rows[0] ? this.mapPayment(rows[0]) : (this.inMemoryTransactions.get(transactionId) || null);
   }
 
   // 4. SIMULATE APPROVAL (For immediate demo/testing in sandbox)
@@ -606,7 +636,11 @@ export class PaymentGatewayService {
     tx.status = 'approved';
     tx.paidAt = Date.now();
     tx.updatedAt = Date.now();
-    await supabaseRest('payments', { method: 'PATCH', query: `id=eq.${encodeURIComponent(transactionId)}`, body: { status: 'paid', paid_at: new Date().toISOString() } });
+    this.inMemoryTransactions.set(transactionId, tx);
+
+    if (isSupabaseConfigured()) {
+      await supabaseRest('payments', { method: 'PATCH', query: `id=eq.${encodeURIComponent(transactionId)}`, body: { status: 'paid', paid_at: new Date().toISOString() } });
+    }
 
     // Update the actual order status to 'recebido' and mark as paid
     await this.markOrderAsPaid(tx.orderId, tx.method, transactionId);
@@ -623,12 +657,15 @@ export class PaymentGatewayService {
     try {
       const order = restaurantStore.getOrderById(orderId);
       if (order) {
-        await supabaseRest('orders', { method: 'PATCH', query: `id=eq.${encodeURIComponent(order.id)}`, body: { payment_status: 'paid', status: 'received' } });
+        if (isSupabaseConfigured()) {
+          await supabaseRest('orders', { method: 'PATCH', query: `id=eq.${encodeURIComponent(order.id)}`, body: { payment_status: 'paid', status: 'received' } });
+        }
         (order as any).pago = true;
         (order as any).pagoEm = Date.now();
         (order as any).transacaoId = transactionId;
         (order as any).metodoPagamento = method;
         order.status = 'recebido';
+        if (!order.statusHistory) order.statusHistory = [];
         order.statusHistory.push({
           status: 'recebido',
           timestamp: Date.now(),
