@@ -182,6 +182,7 @@ export function ThermalReceiptModal({ order, onClose }: ThermalReceiptModalProps
               )}
             </div>
           </div>
+        </div>
 
         {/* Printable Receipt Paper Container */}
         <div className="p-6 bg-slate-950 flex justify-center overflow-x-auto max-h-[70vh] print:p-0 print:max-h-none print:bg-white print:overflow-visible">
