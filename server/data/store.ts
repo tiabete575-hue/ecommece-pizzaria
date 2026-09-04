@@ -34,7 +34,13 @@ export interface StoredOrder {
   pixQrPayload?: string;
   motoboyNome?: string;
   observacoesInternas?: string;
+  /** Token secreto de uso único devolvido ao cliente após criação do pedido.
+   *  Obrigatório em todas as operações de pagamento para garantir que só o
+   *  dono do pedido possa iniciar ou consultar o pagamento.
+   */
+  paymentToken?: string;
 }
+
 
 // In-Memory Server Store (initialized with seed data)
 class RestaurantStore {
@@ -387,6 +393,23 @@ class RestaurantStore {
 
   public getOrderById(id: string): StoredOrder | undefined {
     return this.orders.find((o) => o.id === id || o.numeroPedido === id);
+  }
+
+  /** Valida o paymentToken e retorna o pedido somente se o token bater.
+   *  Retorna undefined se o pedido não existir OU se o token for inválido/ausente.
+   */
+  public verifyPaymentToken(orderId: string, paymentToken: string): StoredOrder | undefined {
+    if (!orderId || !paymentToken) return undefined;
+    const order = this.orders.find((o) => o.id === orderId || o.numeroPedido === orderId);
+    if (!order || !order.paymentToken) return undefined;
+    // Comparação em tempo constante para evitar timing attacks
+    const expected = order.paymentToken;
+    if (expected.length !== paymentToken.length) return undefined;
+    let mismatch = 0;
+    for (let i = 0; i < expected.length; i++) {
+      mismatch |= expected.charCodeAt(i) ^ paymentToken.charCodeAt(i);
+    }
+    return mismatch === 0 ? order : undefined;
   }
 
   public async addOrder(order: StoredOrder): Promise<StoredOrder> {

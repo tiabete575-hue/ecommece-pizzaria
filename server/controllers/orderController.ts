@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import type { OrderPayload, OrderResponse } from '../../src/types/index.ts';
 import { restaurantStore } from '../data/store.ts';
+
 
 const PIZZARIA_WHATSAPP_PHONE = '5561999998686'; // Brasília DF
 const PIX_CHAVE = 'financeiro@gordeixosbrasilia.com.br';
@@ -262,6 +264,12 @@ export const processOrder = async (payload: OrderPayload): Promise<OrderResponse
 
     const orderId = `ped_${orderTimestamp}_${randomSuffix}`;
     const requiresOnlinePayment = cliente.formaPagamento === 'pix' || cliente.formaPagamento === 'cartao_online';
+
+    // Token secreto de pagamento — gerado no servidor, devolvido ao cliente uma
+    // única vez. Obrigatório em /payments/pix/create, /payments/card/process,
+    // /payments/status e /payments/simulate-paid.
+    const paymentToken = requiresOnlinePayment ? crypto.randomUUID() : undefined;
+
     const orderData = {
       id: orderId,
       numeroPedido,
@@ -279,7 +287,8 @@ export const processOrder = async (payload: OrderPayload): Promise<OrderResponse
       status: requiresOnlinePayment ? 'pending_payment' as const : 'recebido' as const,
       statusHistory: [{ status: requiresOnlinePayment ? 'pending_payment' as const : 'recebido' as const, timestamp: orderTimestamp, note: requiresOnlinePayment ? 'Aguardando confirmação do pagamento online' : 'Pedido criado no site' }],
       pixChave: PIX_CHAVE,
-      pixQrPayload: `00020126580014br.gov.bcb.pix0136${PIX_CHAVE}520400005303986540${totalCalculado.toFixed(2)}5802BR5918GORDEIXOS PIZZARIA6008BRASILIA62070503***6304`
+      pixQrPayload: `00020126580014br.gov.bcb.pix0136${PIX_CHAVE}520400005303986540${totalCalculado.toFixed(2)}5802BR5918GORDEIXOS PIZZARIA6008BRASILIA62070503***6304`,
+      paymentToken
     };
 
     // Save in Restaurant Store for KDS
@@ -288,8 +297,9 @@ export const processOrder = async (payload: OrderPayload): Promise<OrderResponse
     return {
       sucesso: true,
       mensagem: requiresOnlinePayment ? 'Pedido criado. Aguardando confirmação do pagamento para entrar na cozinha.' : 'Pedido confirmado e enviado para a cozinha!',
-      pedido: savedOrder as any
+      pedido: { ...savedOrder, paymentToken } as any
     };
+
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Erro interno ao processar pedido.';
     return {

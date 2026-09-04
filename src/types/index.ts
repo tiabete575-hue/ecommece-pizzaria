@@ -301,6 +301,12 @@ export interface OrderResponse {
     pixChave?: string;
     pixQrPayload?: string;
     pixTransactionId?: string;
+    /** Token secreto devolvido ao cliente na criação do pedido.
+     *  Obrigatório para todas as operações de pagamento (PIX, cartão, simulate).
+     *  Presente apenas em pedidos com pagamento online (PIX / cartão_online).
+     */
+    paymentToken?: string;
   };
   erro?: string;
 }
+

@@ -253,19 +253,50 @@ async function dispatch(request: NextRequest, pathParts: string[]) {
       }
     }
 
+    // ── Helper de validação do paymentToken ────────────────────────────────
+    // Verifica se o token enviado pelo cliente bate com o token armazenado no pedido.
+    const requirePaymentToken = (orderId: string, token: string | undefined) => {
+      if (!token) return json({ sucesso: false, mensagem: 'paymentToken obrigatório.' }, 403);
+      const order = restaurantStore.verifyPaymentToken(orderId, token);
+      if (!order) return json({ sucesso: false, mensagem: 'Token de pagamento inválido ou pedido não encontrado.' }, 403);
+      return null; // ok
+    };
+
     if (method === 'POST' && path === '/payments/pix/create') {
-      const order = restaurantStore.getOrderById(String(body.orderId || ''));
+      const orderId = String(body.orderId || '');
+      const tokenError = requirePaymentToken(orderId, body.paymentToken);
+      if (tokenError) return tokenError;
+      const order = restaurantStore.getOrderById(orderId);
       if (!order) return json({ sucesso: false, mensagem: 'Pedido não encontrado.' }, 404);
       return json(await paymentGatewayService.createPixPayment(order.id, order.total, String(body.customerName || order.cliente.nome), body.customerEmail, body.customerCpf));
     }
-    if (method === 'POST' && path === '/payments/card/process') return json(await paymentGatewayService.processCardPayment(body));
+
+    if (method === 'POST' && path === '/payments/card/process') {
+      const orderId = String(body.orderId || '');
+      const tokenError = requirePaymentToken(orderId, body.paymentToken);
+      if (tokenError) return tokenError;
+      return json(await paymentGatewayService.processCardPayment(body));
+    }
+
     const paymentStatus = path.match(/^\/payments\/status\/([^/]+)$/);
     if (method === 'GET' && paymentStatus) {
+      const orderId = url.searchParams.get('orderId') || '';
+      const paymentToken = url.searchParams.get('paymentToken') || '';
+      const tokenError = requirePaymentToken(orderId, paymentToken);
+      if (tokenError) return tokenError;
       const transaction = await paymentGatewayService.getTransactionStatus(decodeURIComponent(paymentStatus[1]));
       return transaction ? json({ sucesso: true, transaction, isPaid: transaction.status === 'approved' }) : json({ sucesso: false, mensagem: 'Transação não encontrada.' }, 404);
     }
+
     const simulatePayment = path.match(/^\/payments\/simulate-paid\/([^/]+)$/);
-    if (method === 'POST' && simulatePayment) return json(await paymentGatewayService.simulateApprovePayment(decodeURIComponent(simulatePayment[1])));
+    if (method === 'POST' && simulatePayment) {
+      const orderId = String(body.orderId || '');
+      const tokenError = requirePaymentToken(orderId, body.paymentToken);
+      if (tokenError) return tokenError;
+      return json(await paymentGatewayService.simulateApprovePayment(decodeURIComponent(simulatePayment[1])));
+    }
+
+
 
     const webhook = path.match(/^\/webhooks\/(mercadopago|efi|asaas|infinitepay)$/);
     if (method === 'POST' && webhook) {

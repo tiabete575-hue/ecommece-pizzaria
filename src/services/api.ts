@@ -323,6 +323,7 @@ export const testGatewayConnection = async (provider: string) => {
 
 export const createPixPayment = async (data: {
   orderId: string;
+  paymentToken: string;
   amount: number;
   customerName: string;
   customerEmail?: string;
@@ -342,6 +343,7 @@ export const createPixPayment = async (data: {
 
 export const processCardPayment = async (data: {
   orderId: string;
+  paymentToken: string;
   demoToken: string;
   cardLast4: string;
   cardBrand: string;
@@ -359,19 +361,23 @@ export const processCardPayment = async (data: {
   return response.json();
 };
 
-export const fetchPaymentStatus = async (transactionId: string) => {
-  const response = await fetch(`/api/payments/status/${encodeURIComponent(transactionId)}`);
+export const fetchPaymentStatus = async (transactionId: string, orderId: string, paymentToken: string) => {
+  const params = new URLSearchParams({ orderId, paymentToken });
+  const response = await fetch(`/api/payments/status/${encodeURIComponent(transactionId)}?${params}`);
   if (!response.ok) throw new Error('Falha ao verificar status da transação.');
   return response.json();
 };
 
-export const simulatePaymentApproval = async (transactionId: string) => {
+export const simulatePaymentApproval = async (transactionId: string, orderId: string, paymentToken: string) => {
   const response = await fetch(`/api/payments/simulate-paid/${encodeURIComponent(transactionId)}`, {
-    method: 'POST'
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, paymentToken })
   });
   if (!response.ok) throw new Error('Falha ao simular aprovação do pagamento.');
   return response.json();
 };
+
 
 // ==========================================
 // IMPRESSORAS TÉRMICAS ESC/POS

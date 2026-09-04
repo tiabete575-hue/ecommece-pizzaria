@@ -67,7 +67,11 @@ export function PixDynamicPaymentModal({
     const interval = setInterval(async () => {
       try {
         setPollCount((c) => c + 1);
-        const res = await fetchPaymentStatus(pixData.transactionId);
+        const res = await fetchPaymentStatus(
+          pixData.transactionId,
+          orderData?.id || '',
+          orderData?.paymentToken || ''
+        );
         if (isMounted && (res.isPaid || res.transaction?.status === 'approved')) {
           setIsApproved(true);
           confetti({
@@ -88,7 +92,7 @@ export function PixDynamicPaymentModal({
       isMounted = false;
       clearInterval(interval);
     };
-  }, [pixData.transactionId, isApproved, onPaymentApproved]);
+  }, [pixData.transactionId, orderData?.id, orderData?.paymentToken, isApproved, onPaymentApproved]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(pixData.pixCopiaECola);
@@ -99,7 +103,11 @@ export function PixDynamicPaymentModal({
   const handleSimulatePayment = async () => {
     setIsSimulating(true);
     try {
-      const res = await simulatePaymentApproval(pixData.transactionId);
+      const res = await simulatePaymentApproval(
+        pixData.transactionId,
+        orderData?.id || '',
+        orderData?.paymentToken || ''
+      );
       if (res.sucesso) {
         setIsApproved(true);
         confetti({
@@ -117,6 +125,7 @@ export function PixDynamicPaymentModal({
       setIsSimulating(false);
     }
   };
+
 
   const formatMinutes = (seconds: number) => {
     const m = Math.floor(seconds / 60);

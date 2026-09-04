@@ -306,6 +306,7 @@ export const CheckoutModal: React.FC = () => {
         try {
           const pixRes: PixPaymentResponse = await createPixPayment({
             orderId: createdOrder.id,
+            paymentToken: createdOrder.paymentToken!,
             amount: createdOrder.total,
             customerName: createdOrder.cliente.nome,
             customerEmail: 'cliente@gordeixosbrasilia.com.br',
@@ -334,6 +335,7 @@ export const CheckoutModal: React.FC = () => {
           const cardBrand = /^4/.test(cleanCard) ? 'Visa' : /^5[1-5]/.test(cleanCard) ? 'Mastercard' : /^3[47]/.test(cleanCard) ? 'American Express' : 'Cartão Demo';
           const cardRes = await processCardPayment({
             orderId: createdOrder.id,
+            paymentToken: createdOrder.paymentToken!,
             demoToken: `demo_${crypto.randomUUID()}`,
             cardLast4: cleanCard.slice(-4),
             cardBrand,
@@ -369,6 +371,7 @@ export const CheckoutModal: React.FC = () => {
           return;
         }
       }
+
 
       // CASE 3: CARTÃO NA ENTREGA / DINHEIRO / PADRÃO
       try {
